@@ -1,0 +1,30 @@
+//@version=5
+indicator("Smart Liquidity Nodes", overlay=true)
+
+// === Inputs ===
+signal_tf = input.timeframe("5", title="Signal Timeframe") // Default: 1-minute for real-time tracking
+liquidityThreshold = input.float(1.5, title="Liquidity Sensitivity (%)", minval=0.5, maxval=5.0, step=0.1)
+nodeLookback = input.int(20, title="Lookback Period (Bars)", minval=5, maxval=50, step=1)
+
+// === Data Fetching ===
+[highTF, lowTF, closeTF, volumeTF] = request.security(syminfo.tickerid, signal_tf, [high, low, close, volume])
+
+// === 1️⃣ Identify Volume Clusters ===
+float avgVolume = ta.sma(volumeTF, nodeLookback)
+bool highVolumeZone = volumeTF > avgVolume * liquidityThreshold
+
+// === 2️⃣ Identify Liquidity Absorption Areas ===
+bool priceStall = ta.highest(closeTF, nodeLookback) == closeTF or ta.lowest(closeTF, nodeLookback) == closeTF
+bool wickRejectionUp = highTF == ta.highest(highTF, nodeLookback) and closeTF < highTF
+bool wickRejectionDown = lowTF == ta.lowest(lowTF, nodeLookback) and closeTF > lowTF
+bool strongLiquidityNode = highVolumeZone and priceStall and (wickRejectionUp or wickRejectionDown)
+
+// === 3️⃣ Dynamic Liquidity Level Calculation ===
+var float liquidityLevel = na
+liquidityLevel := strongLiquidityNode ? closeTF : liquidityLevel
+
+// === 4️⃣ Adaptive Liquidity Zone ===
+plot(liquidityLevel, title="Liquidity Node Level", color=#000000, linewidth=2, style=plot.style_line)
+
+// === Alerts ===
+alertcondition(strongLiquidityNode, title="SLN Liquidity Zone", message="Strong Liquidity Absorption Detected!")
